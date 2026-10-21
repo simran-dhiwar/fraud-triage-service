@@ -1,0 +1,10 @@
+2026-10-21 17:42:13,394 | INFO | endpoint=/score status=200 latency_ms=290.54 txn_id=T800001 probability=0.043
+2026-10-21 17:42:13,584 | INFO | endpoint=/score status=200 latency_ms=179.23 txn_id=T800002 probability=0.9597
+2026-10-21 17:42:13,858 | INFO | endpoint=/score status=200 latency_ms=182.70 txn_id=T800003 probability=0.1765
+2026-10-21 17:42:13,896 | WARNING | endpoint=/score status=400 latency_ms=6.54 txn_id=T800004 probability=unknown
+2026-10-21 17:42:13,917 | WARNING | endpoint=/score status=422 latency_ms=13.78 txn_id=T800005 probability=unknown
+2026-10-21 17:42:14,310 | INFO | endpoint=/case status=200 latency_ms=375.54 txn_id=T900002 probability=0.9597
+2026-10-21 17:42:14,422 | INFO | endpoint=/case status=200 latency_ms=98.85 txn_id=T900005 probability=0.9597
+2026-10-21 17:42:14,497 | ERROR | endpoint=/case status=503 latency_ms=69.84 txn_id=T900099 probability=0.9597
+2026-10-21 17:42:14,581 | INFO | endpoint=/case status=200 latency_ms=78.68 txn_id=T800001 probability=0.043
+2026-10-21 17:42:14,675 | INFO | endpoint=/case status=200 latency_ms=87.77 txn_id=T800006 probability=0.9597
