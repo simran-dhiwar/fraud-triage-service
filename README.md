@@ -269,8 +269,6 @@ The `smoke_test.py` script checks the API endpoints and expected responses.
 
 ### Final Metrics
 
-### Final Metrics
-
 The `/metrics` endpoint returned the following values after the final smoke-test run:
 
 ```json
