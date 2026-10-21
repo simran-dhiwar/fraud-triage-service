@@ -20,9 +20,7 @@ python -m venv .venv
 
 Activate the virtual environment on Windows:
 
-```bash
 .venv\Scripts\activate
-```
 
 Install the dependencies:
 
