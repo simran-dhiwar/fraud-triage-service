@@ -1,12 +1,59 @@
 
 # Razorpay Merchant Risk Desk — Fraud Triage Service
 
-## Project Overview
+## Overview
 
 This project builds a fraud triage service for payment transactions.
 It cleans transaction data, creates useful features, detects potentially
 fraudulent transactions, retrieves relevant fraud policies, and generates
 case notes.
+
+## Reproduce
+
+Run these commands from a terminal after cloning the repository.
+
+```bash
+git clone https://github.com/simran-dhiwar/fraud-triage-service.git
+cd fraud-triage-service
+python -m venv .venv
+```
+
+Activate the virtual environment on Windows:
+
+```bash
+.venv\Scripts\activate
+```
+
+Install the dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+Run the project scripts in order:
+
+```bash
+python generate_data.py
+python prepare.py
+python train.py
+python retrieval.py
+python casenote.py
+```
+
+Start the API service in one terminal:
+
+```bash
+uvicorn app:app --reload
+```
+
+In a second terminal, activate the virtual environment, then run:
+
+```bash
+python smoke_test.py
+```
+
+The smoke test checks the API endpoints and reports the observed HTTP status codes.
+
 
 ## Part A: Data Foundation
 
@@ -111,19 +158,6 @@ Therefore, accuracy alone is not a suitable headline metric for this
 imbalanced fraud-detection problem. Recall and precision should also
 be evaluated.
 
-## Run the Data Preparation Script
-
-Install dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-
-Run:
-
-```bash
-python prepare.py
-```
 
 ## Part B — Fraud Model Training and Evaluation
 
@@ -135,16 +169,49 @@ python prepare.py
 - Fraud cases: 220 training, 73 validation, 73 test
 - Missing `distance_from_home_km` values were filled using the training-set median of 12.6 km.
 - Model input features: 26, excluding identifiers, `chargeback_filed`, and the target `is_fraud`.
+The model uses the following 26 input columns in this exact order:
+
+```python
+[
+    'amount_inr',
+    'hour_of_day',
+    'txn_count_last_24h',
+    'avg_amount_30d_inr',
+    'distance_from_home_km',
+    'is_new_device',
+    'account_age_days',
+    'amount_vs_avg_ratio',
+    'is_night',
+    'high_value',
+    'merchant_category_Electronics',
+    'merchant_category_Fashion',
+    'merchant_category_Food Delivery',
+    'merchant_category_Grocery',
+    'merchant_category_Travel',
+    'merchant_category_Utilities',
+    'city_Bengaluru',
+    'city_Chennai',
+    'city_Delhi',
+    'city_Kolkata',
+    'city_Mumbai',
+    'city_Pune',
+    'payment_mode_Card',
+    'payment_mode_NetBanking',
+    'payment_mode_UPI',
+    'payment_mode_Wallet'
+]
+```
+
+Identifiers (`txn_id`, `customer_id`), the target (`is_fraud`), and `chargeback_filed` are excluded from the model inputs.
+
 
 ### Logistic Regression Comparison
 
-| Model | Precision | Recall | F1 |
-|---|---:|---:|---:|
-| Plain Logistic Regression | 0.625 | 0.342 | 0.442 |
-| Balanced Logistic Regression | 0.252 | 0.781 | 0.381 |
-| Oversampled Logistic Regression | 0.257 | 0.781 | 0.386 |
-
-Oversampling was performed on the training data only, producing 6,662 rows.
+| Model | Precision | Recall | F1 | Confusion matrix (TN, FP, FN, TP) |
+|---|---:|---:|---:|---|
+| Plain Logistic Regression | 0.625 | 0.342 | 0.442 | `[1096, 15, 48, 25]` |
+| Balanced Logistic Regression | 0.252 | 0.781 | 0.381 | `[942, 169, 16, 57]` |
+| Oversampled Logistic Regression | 0.257 | 0.781 | 0.386 | `[946, 165, 16, 57]` |
 
 ### Cross-Validation and Tuning
 
@@ -157,6 +224,20 @@ Oversampling was performed on the training data only, producing 6,662 rows.
 ### Threshold Selection
 
 The threshold was selected using validation data. The highest tested threshold with recall of at least 0.65 was **0.4**. At this threshold, validation precision was 0.272, recall was 0.712, F1 was 0.394, and 191 transactions were flagged.
+
+| Threshold | Precision | Recall | F1 | Transactions flagged |
+|---:|---:|---:|---:|---:|
+| 0.1 | 0.111 | 0.973 | 0.200 | 638 |
+| 0.2 | 0.158 | 0.945 | 0.271 | 437 |
+| 0.3 | 0.209 | 0.863 | 0.336 | 302 |
+| 0.4 | 0.272 | 0.712 | 0.394 | 191 |
+| 0.5 | 0.352 | 0.589 | 0.441 | 122 |
+| 0.6 | 0.507 | 0.507 | 0.507 | 73 |
+| 0.7 | 0.528 | 0.260 | 0.349 | 36 |
+| 0.8 | 0.778 | 0.192 | 0.308 | 18 |
+| 0.9 | 0.800 | 0.055 | 0.103 | 5 |
+
+The selected threshold is **0.4**, prioritizing recall of fraudulent transactions while keeping the review workload manageable.
 
 ### Final Test Results
 
@@ -177,6 +258,14 @@ The selected threshold of 0.4 prioritizes fraud detection, achieving 78.1% recal
 
 `chargeback_filed` is excluded from the production model because it may be recorded after a transaction is investigated or identified as fraudulent. Including it can leak information that would not be available when the original transaction needs to be scored.
 
+#### Leakage Experiment Results
+
+| Experiment | Validation F1 |
+|---|---:|
+| Clean tuned Random Forest | 0.441 |
+| Random Forest with leakage, threshold 0.5 | 0.797 |
+
+The leakage experiment demonstrates that including information that may be recorded after a transaction is investigated can artificially inflate validation performance. The production model excludes `chargeback_filed` to avoid using this potentially unavailable information.
 
 
 ## Part C — Policy Retrieval and Case-Note Generation
@@ -195,6 +284,31 @@ given query.
 The retrieval evaluation uses the supplied queries in
 `retrieval_queries.json`.
 
+#### Retrieval Evaluation Results
+
+All 8 in-scope queries retrieved the expected policy. Both out-of-scope queries scored below the selected minimum similarity threshold of `0.4557`.
+
+| Expected Policy | Retrieved Policy | Similarity Score | Result |
+|---|---|---:|---|
+| P1 | P1 | 0.5501 | PASS |
+| P2 | P2 | 0.5622 | PASS |
+| P3 | P3 | 0.4948 | PASS |
+| P4 | P4 | 0.5689 | PASS |
+| P5 | P5 | 0.5641 | PASS |
+| P6 | P6 | 0.6250 | PASS |
+| P2 | P2 | 0.4862 | PASS |
+| P4 | P4 | 0.4867 | PASS |
+| None (out of scope) | P3 | 0.4251 | Rejected by threshold |
+| None (out of scope) | P1 | 0.0000 | Rejected by threshold |
+
+- In-scope top-1 accuracy: **8/8 (100%)**
+- Lowest in-scope similarity score: `0.4862`
+- Highest out-of-scope similarity score: `0.4251`
+- Selected minimum score: `0.4557`
+
+The threshold separates these tested in-scope and out-of-scope queries. This small test set does not guarantee correct retrieval for every possible query.
+
+
 ### Case-Note Generation and Validation
 
 The `casenote.py` module generates structured case notes using the supplied
@@ -210,6 +324,32 @@ mock LLM implementation.
 
 The supplied `mock_llm.py` implementation is used for testing without
 requiring a paid external LLM service.
+
+#### Case-Note Test Results
+
+All 10 test scenarios completed successfully (`Status: ok`).
+
+| Transaction ID | Attempts | Failed Attempts | Safe Default | Override |
+|---|---:|---|---|---|
+| T900001 | 1 | None | No | No |
+| T900002 | 2 | [1] | No | No |
+| T900003 | 2 | [2] | No | No |
+| T900004 | 2 | [3] | No | No |
+| T900005 | 3 | [1, 1, 1] | Yes | No |
+| T900006 | 1 | None | No | Yes |
+| T900007 | 2 | [3] | No | No |
+| T900008 | 1 | None | No | No |
+| T900009 | 3 | [1, 2] | No | No |
+| T900010 | 2 | [3] | No | No |
+
+- Total scenarios: **10**
+- Completed successfully: **10/10**
+- Scenarios requiring more than one attempt: **7**
+- Safe-default responses: **1**
+- Override cases: **1**
+
+`Status: ok` means the scenario completed successfully. It does not mean every attempt generated a valid note; scenario T900005 used the safe-default response after all three attempts failed.
+
 
 ### Case-Note Test Scenarios
 
@@ -299,6 +439,7 @@ Example log entries:
 
 These entries illustrate a successful request, a client-side validation error, and a server-side failure.
 
+
 ### Limitations
 
 - The model is trained on the supplied dataset; real-world performance
@@ -313,4 +454,3 @@ These entries illustrate a successful request, a client-side validation error, a
 - A production deployment would require further security, monitoring,
   reliability, and performance testing.
 - Human review remains important for uncertain or high-risk transactions.
-```
